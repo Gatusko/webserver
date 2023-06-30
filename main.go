@@ -31,9 +31,9 @@ func main() {
 	r.Use(middlewareCors)
 	r.Mount("/api", apiRouter(&newApiConfig))
 	//httpFileHandle := http.StripPrefix("/app", http.FileServer(http.Dir("./app")))
-	assetsHandler := http.StripPrefix("/app/assets/", http.FileServer(http.Dir("./app/assets")))
-	r.Handle("/app*", newApiConfig.middleWareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./app")))))
-	r.Handle("/app/assets/*", assetsHandler)
+	assetsHandler := http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+	r.Handle("/app", assetsHandler)
+	r.Handle("/app/*", assetsHandler)
 	server := http.Server{}
 	server.Addr = "localhost:8080"
 	server.Handler = r
