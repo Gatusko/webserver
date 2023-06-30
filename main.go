@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 )
 
@@ -25,19 +26,25 @@ func (cfg *apiConfig) getCount(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	newApiConfig := apiConfig{}
-	mux := http.NewServeMux()
-
+	r := chi.NewRouter()
 	//mux.Handle("/", http.FileServer(http.Dir(".")))
-	mux.HandleFunc("/healthz", healthHandler)
-	corsMux := middlewareCors(mux)
+	r.Use(middlewareCors)
+	r.Mount("/api", apiRouter(&newApiConfig))
 	//httpFileHandle := http.StripPrefix("/app", http.FileServer(http.Dir("./app")))
-	mux.Handle("/app/", newApiConfig.middleWareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./app")))))
-	mux.Handle("/app/assets/", http.StripPrefix("/app/assets/", http.FileServer(http.Dir("./app/assets"))))
-	mux.HandleFunc("/metrics", newApiConfig.getCount)
+	assetsHandler := http.StripPrefix("/app/assets/", http.FileServer(http.Dir("./app/assets")))
+	r.Handle("/app*", newApiConfig.middleWareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("./app")))))
+	r.Handle("/app/assets/*", assetsHandler)
 	server := http.Server{}
 	server.Addr = "localhost:8080"
-	server.Handler = corsMux
+	server.Handler = r
 	server.ListenAndServe()
+}
+
+func apiRouter(config *apiConfig) http.Handler {
+	r := chi.NewRouter()
+	r.Get("/healthz", healthHandler)
+	r.Get("/metrics", config.getCount)
+	return r
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +55,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func middlewareCors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("CORS")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
