@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -40,7 +41,7 @@ func (cfg *apiConfig) getAdminCount(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("\t<html>\n\n\t<body>\n\t<h1>Welcome, Chirpy Admin</h1>\n\t<p>Chirpy has been visited %d times!</p>\n\t</body>\n\n\t</html>", cfg.fileserverHits)))
 }
 
-var database *internal.DB
+var Database *internal.DB
 
 func main() {
 	memory, err := internal.NewDB(".")
@@ -48,7 +49,7 @@ func main() {
 		log.Fatalf("Issue loading the databse : %s", err)
 		return
 	}
-	database = memory
+	Database = memory
 	newApiConfig := apiConfig{}
 	r := chi.NewRouter()
 	//mux.Handle("/", http.FileServer(http.Dir(".")))
@@ -70,18 +71,52 @@ func apiRouter(config *apiConfig) http.Handler {
 	r.Get("/healthz", healthHandler)
 	r.Post("/chirps", validateHandler)
 	r.Get("/chirps", getAllChirps)
+	r.Get("/chirps/{chirpId}", getChirp)
+	r.Post("/users", createUser)
 	//r.Get("/metrics", config.getCount)
 	return r
 }
 
+func createUser(w http.ResponseWriter, r *http.Request) {
+	user := structs.User{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&user)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("%s", err))
+		return
+	}
+	user, err = Database.NewUser(user.Email)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("%s", err))
+		return
+	}
+	respondWithJSON(w, http.StatusCreated, user)
+	return
+}
+
+func getChirp(w http.ResponseWriter, r *http.Request) {
+	chirpId := chi.URLParam(r, "chirpId")
+	chirpInt, err := strconv.Atoi(chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("%s", err))
+		return
+	}
+	myChirp, err := Database.GetChirp(chirpInt)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, fmt.Sprintf("%s", err))
+		return
+	}
+	respondWithJSON(w, http.StatusOK, myChirp)
+	return
+}
+
 func getAllChirps(w http.ResponseWriter, r *http.Request) {
-	allChirps, err := database.GetChirps()
+	allChirps, err := Database.GetChirps()
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error getting all chirps :  %s", err))
 		return
 	}
 	respondWithJSON(w, http.StatusOK, allChirps)
-
 }
 
 func validateHandler(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +142,7 @@ func validateHandler(w http.ResponseWriter, r *http.Request) {
 			spplitedString[i] = "****"
 		}
 	}
-	chir, err = database.CreateChirp(chir.Body)
+	chir, err = Database.CreateChirp(chir.Body)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error : %s", err))
 		return

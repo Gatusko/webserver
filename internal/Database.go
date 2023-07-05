@@ -11,16 +11,18 @@ import (
 
 type DB struct {
 	path string
-	mux  *sync.RWMutex
+	Mux  *sync.RWMutex
 }
 
 type DBStrcutre struct {
 	Chirps map[int]structs.Chirpy `json:"chirps"`
+	Users  map[int]structs.User   `json:"users"`
 }
 
 func (dbStruc *DBStrcutre) NewMemory() {
 	log.Printf("Creating new Memory")
 	dbStruc.Chirps = make(map[int]structs.Chirpy)
+	dbStruc.Users = make(map[int]structs.User)
 }
 
 const DBName = "myDb.json"
@@ -35,7 +37,7 @@ func NewDB(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("We can't create the Databse : %s", err)
 	}
-	database.mux = &sync.RWMutex{}
+	database.Mux = &sync.RWMutex{}
 
 	if err != nil {
 		return &database, fmt.Errorf("We have an issue loading the memory %s", err)
@@ -44,8 +46,8 @@ func NewDB(path string) (*DB, error) {
 }
 
 func (db *DB) CreateChirp(body string) (structs.Chirpy, error) {
-	db.mux.Lock()
-	defer db.mux.Unlock()
+	db.Mux.Lock()
+	defer db.Mux.Unlock()
 	newChirpy := structs.Chirpy{}
 	newChirpy.Body = body
 	newChirpy.Id = len(LoadedDB.Chirps) + 1
@@ -63,6 +65,14 @@ func (db *DB) GetChirps() ([]structs.Chirpy, error) {
 		allChirps = append(allChirps, value)
 	}
 	return allChirps, nil
+}
+
+func (db *DB) GetChirp(id int) (structs.Chirpy, error) {
+	chirp, ok := LoadedDB.Chirps[id]
+	if ok == false {
+		return structs.Chirpy{}, fmt.Errorf("Chirp not found")
+	}
+	return chirp, nil
 }
 
 func (db *DB) writeDB(dbStruc DBStrcutre) error {
@@ -102,4 +112,18 @@ func (db *DB) ensureDB() error {
 	log.Printf("I am here")
 	LoadedDB, err = db.loadDB(LoadedDB)
 	return nil
+}
+
+func (db *DB) NewUser(name string) (structs.User, error) {
+	db.Mux.Lock()
+	defer db.Mux.Unlock()
+	id := len(LoadedDB.Users) + 1
+	user := structs.User{id, name}
+	LoadedDB.Users[id] = user
+	err := db.writeDB(LoadedDB)
+	if err != nil {
+		return structs.User{}, fmt.Errorf("Error creating the user %s:", err)
+	}
+	log.Printf("Created new user: %s", user)
+	return user, nil
 }
